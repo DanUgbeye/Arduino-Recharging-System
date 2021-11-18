@@ -18,7 +18,7 @@ DateTime RESET(2010, 1, 1, 12, 0, 0);
 const int no_of_Pw = 3;
 
 //change the number below to the LENGTH of each password
-int pwLength = 3;
+const int pwLength = 3;
 
 //space taken to write a date to EEPROM, DO NOT CHANGE!
 int space_for_date = 9;
@@ -65,7 +65,6 @@ void showDate(const DateTime& dt, int row);
 
 void setup() {
   // put your setup code here, to run once:
-  next_UnusedAddress = space_for_date;
 
   EEPROM.begin();
 
@@ -76,6 +75,7 @@ void setup() {
   delay(1000);
 
   pinMode(gatePin, OUTPUT);
+  next_UnusedAddress = space_for_date + (no_of_Pw * pwLength);
 
   for(int i = 0; i < pwLength; i++){
       CLEARED[i] = '0';
@@ -94,7 +94,6 @@ void setup() {
     lcd.print("RTC NOT initialized");
     lcd.setCursor(0,3);
     lcd.print("   Setting time!");
-    resetDate();
     delay(500);
     clearRow(2);
     clearRow(3);
@@ -111,9 +110,15 @@ void setup() {
     // after the RTC is powered, lostPower() may still return true.
   }
 
+  rtc.start();
+
   String test = (readData(space_for_date));
 
-  if(test != p1 || test != CLEARED){
+  if(test != p1 && test != CLEARED){
+
+    next_UnusedAddress = space_for_date;
+    resetDate();
+
     //use the writedata function to save all passwords to the EEPROM
     writeData(p1);
     writeData(p2);
@@ -125,7 +130,6 @@ void setup() {
     clearRow(2);
   }
 
-  rtc.start();
   loading();
   lcd.clear();
 }
@@ -305,7 +309,7 @@ String getPassword(){
           lcd.setCursor(17,1);
           lcd.print("   ");
         }
-        key = NULL;
+        key = '\0';
       } else if (key == '*') {
         if(pwd != ""){
           lcd.setCursor(0,1);
@@ -314,7 +318,7 @@ String getPassword(){
           clearRow(1);
           pwd = "";                       // clear input
         }
-        key = NULL;
+        key = '\0';
       }else if (key == '#'){
         if(pwd.length() > 0){
           clearRow(1);
@@ -326,7 +330,7 @@ String getPassword(){
           clearRow(1);
         }
 
-        key = NULL;
+        key = '\0';
       }
     }
   }
@@ -380,7 +384,8 @@ bool checkPw(String input){
 void menu(){
 
   bool saved = checkDateSaved();
-  if(saved == true ){
+
+  if(saved == true){
     timeLeft(CD);
   }else{
     String input = "\0";
@@ -415,14 +420,6 @@ void menu(){
       //timer function comes here
       timeLeft(CD);
 
-      clearRow(0);
-      clearRow(2);
-      clearRow(1);
-      lcd.setCursor(0,0);
-      lcd.print("   TIME EXPIRED!");
-      digitalWrite(gatePin, LOW);
-      delay(1000);
-
     }else if(match == false){
       clearRow(1);
       clearRow(2);
@@ -444,8 +441,7 @@ void menu(){
         lcd.print("     WAIT!");
 
         //code to lock for 5 seconds
-        for (int i = 5; i > 0; i--)
-        {
+        for (int i = 5; i > 0; i--){
           lcd.setCursor(12, 1);
           lcd.print(i);
           lcd.print("s");
@@ -512,7 +508,7 @@ void clearData(int currentPos){
             battery();
             return ;
         }
-        EEPROM.write(i, 0);
+        EEPROM.update(i, 0);
     }
 }
 
@@ -521,7 +517,7 @@ String readData(int currentPos){
     String pw = ""  ;
     for(int i = currentPos; i < currentPos + pwLength; i++){
         //checking if max used address is exceeded
-        if(i >= next_UnusedAddress && next_UnusedAddress > space_for_date){
+        if(i >= next_UnusedAddress && next_UnusedAddress < space_for_date){
             lcd.setCursor(0,3);
             lcd.print("ERROR READING DATA!");
             delay(500);
@@ -559,7 +555,7 @@ void timeLeft(CountDown cd){
     left = future - now;
   }else{
     now = rtc.now();
-    future = now + TimeSpan(0, 0, 0, 30);
+    future = now + TimeSpan(30, 0, 0, 0);
     writeDate(future);
     left = future - now;
   }
@@ -568,17 +564,21 @@ void timeLeft(CountDown cd){
   lcd.print("     TIME LEFT");
 
   cd.start((left.days()), (left.hours()), (left.minutes()), (left.seconds()));
+
   if (cd.remaining() > 0){
     digitalWrite(gatePin, HIGH);
   }
 
   unsigned long timeleft;
+  unsigned long timer;
+
 
   while(cd.remaining() > 0){
 
-    if (timeleft != cd.remaining() || cd.remaining() == 0 ){
+    if (timer != cd.remaining() || cd.remaining() == 0 ){
 
       timeleft = cd.remaining();
+      timer = cd.remaining();
 
       // Calculating the days, hours, minutes and seconds left
       int days = int(timeleft / (60UL * 60UL * 24UL));
@@ -634,6 +634,12 @@ void timeLeft(CountDown cd){
     }
   }
 
-  digitalWrite(gatePin, LOW);
   resetDate();
+  clearRow(0);
+  clearRow(2);
+  clearRow(1);
+  lcd.setCursor(0,0);
+  lcd.print("   TIME EXPIRED!");
+  digitalWrite(gatePin, LOW);
+  delay(1000);
 }
